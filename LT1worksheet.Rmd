@@ -1,0 +1,112 @@
+---
+title: "LT1 Worksheet"
+output: html_notebook
+---
+
+
+
+```{r}
+install.packages("readr")
+install.packages("tidyverse")
+install.packages("psych")
+install.packages("mice")
+install.packages("MissMech")
+install.packages("performance")
+```
+
+```{r}
+library(readr)
+library(tidyverse)
+library(psych)
+library(mice)
+library(MissMech)
+library(performance)
+```
+```{r}
+climate <- read_csv("~/Downloads/climate.csv")
+head(climate)
+```
+
+### Screening 
+```{r}
+describe(climate)
+```
+The variables fall between 1-7 therefore all conform to the appropriate range required in the research. 
+
+
+### Missing value analysis 
+```{r}
+climate_var <-
+  climate %>%
+  select(5:16) # select out only the items
+md.pattern(climate_var) # run the missing data pattern function
+```
+204 of the cases have no missing data, whilst 8 cases have one or more data values missing. 
+
+### Missing data mechanism 
+This tests whether the data is missing completely at random. It carries out this test by testing the null hypothesis that states that there is equality in covariance between missing and non-missing data groups. 
+```{r}
+out.MCAR.ws <- TestMCARNormality(climate_var, del.lesscases = 1)
+summary(out.MCAR.ws)
+```
+The p value is above 0.05 which shows that there is significant evidence to accept the null and say that the data are missing at complete random. Because the data are missing at complete random we can use listwise deletion to remove individuals with more than 10% of their data missing. Because only 8 cases are missing, anyone with more than 1 item missing should be removed from the analysis.
+
+
+### Removing cases listwise with > 10% missing 
+```{r}
+climate_var$na_count <- apply(is.na(climate_var), 1, sum)
+climate_var
+climate_var <- 
+climate_var %>% 
+filter(na_count <= "1")
+climate_var
+```
+No cases were filtered because none of the participants had more than one case that was missing. 
+### Scale mean imputation 
+```{r}
+climate_var <-
+  climate_var %>%
+  rowwise()%>%
+  mutate(meanEgal = mean(c(Egal1,Egal2,Egal3), na.rm = TRUE)) %>%
+  mutate(meanInd = mean(c(Ind1,Ind2,Ind3), na.rm = TRUE)) %>%
+  mutate(meanGovSupport = mean(c(GovSupport1,GovSupport2,GovSupport3), na.rm = TRUE)) %>%
+  mutate(meanNegEmot = mean(c(NegEmot1,NegEmot2,NegEmot3), na.rm = TRUE))
+climate_var
+```
+
+
+```{r}
+climate_var <- within(climate_var, Egal2 <- ifelse(is.na(Egal2), meanEgal, Egal2))
+climate_var <- within(climate_var, Ind2 <- ifelse(is.na(Ind2), meanInd, Ind2))
+climate_var <- within(climate_var, GovSupport2 <- ifelse(is.na(GovSupport2), meanGovSupport, GovSupport2))
+climate_var <- within(climate_var, Egal1 <- ifelse(is.na(Egal1), meanEgal, Egal1))
+climate_var <- within(climate_var, Ind3 <- ifelse(is.na(Ind3), meanInd, Ind3))
+
+```
+
+```{r}
+md.pattern(climate_var) # run the missing data pattern function
+```
+
+### Model diagnostic 
+```{r}
+lm.model <- 
+  lm(meanGovSupport ~ meanNegEmot + meanEgal + meanInd, data = climate_var)
+summary(lm.model)
+```
+
+```{r}
+library(performance)
+check_model(lm.model)
+```
+The residuals appear to be normally distributed, as shown by the histogram and the QQ plot(the points lie closely on the line). 
+However, the the plot of residuales against predicted values seems to be equally distributed across fitted values, therefore can be described as homoscedastic. 
+
+
+
+### Test the linear model 
+```{r}
+summary(lm.model)
+confint(lm.model)
+```
+The model shows that for every unit increase in negative emotion about climate change, there is a 0.06 unit increase in positive support for government action on climate change, when egalitarianism and individualism is controlled for. However, this effect is not significant as the p value is above 0.05, therefore we can accept the null hypothesis that the relationship between negative emotions about climate change, controlling for egalitarisnism and individualism is zero. It may be that having a egalitarian worldview may explain the slight relationship as it has a significant relationship with positive government support when controlled for the other factors, therefore may act as a mediator or moderator in the relationship.  

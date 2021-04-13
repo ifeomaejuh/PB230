@@ -1,0 +1,125 @@
+---
+title: "Worksheet 2"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+install.packages("readr")
+install.packages("lavaan")
+install.packages("Hmisc")
+library("readr")
+library(Hmisc)
+```
+
+### Path Analysis 
+```{r}
+library(readr)
+climate <- read_csv("~/Downloads/climate_clean.csv")
+View(climate)
+```
+
+```{r}
+rcorr(as.matrix(climate[,c("egal","emot","gov")], type="pearson"))
+```
+
+There is a moderately strong posistive correlation between negative emotion towards climate change and egalitarian views of 0.61.
+There is a weak but positive correlation of 0.29 between government support for climate change and egalitarian views.
+THere is a weak but positive correlation of 0.2 between government support and egalitarian views, therefore as governmemt support for climate change policy increases a persons egalitarian views also increase. All of these correlations are significant. 
+
+
+
+### Fit the path model
+```{r}
+med.model <- "
+# the b and c paths
+  gov ~ b * emot + c * egal
+# the a path
+  egal ~ a * emot
+# indirect effect
+ab := a*b
+total := ab+c
+"
+```
+
+```{r}
+med.fit <- sem(med.model, data = climate, se = "bootstrap", bootstrap = 5000)
+summary(med.fit, fit.measures=TRUE, standardized=TRUE, ci=TRUE)
+```
+The model fit is perfect (CFI,TLI) because there are no free parameters. The model contains all the necessary parameters so there are no degrees of freedom, and the paths will perfectly fit the data.
+
+```{r}
+parameterEstimates(med.fit, boot.ci.type = "perc", standardized = TRUE)
+```
+The estimate of the path a is 0.406, and the confidence interval runs from 0.328 to 0.482 
+The estimate of the path b is 0.037, however this is not significant as the confidence interval is from -0.126 to 0.2 which runs through zero. 
+The estimate of the path c (the direct effect) is 0.367, the confidence interval runs from 0.107 to 0.606.
+The estimate of the ab path (the indirect effect) is 0.015, however this path is not significant as the confidence interval runs from -0.055 to 0.082.
+
+In order to test the hypothesized mediation model, path analysis with maximum likelihood estimation was conducted using the laavan R package. The indirect effect was tested that included one independent variable (negative emotions regarding climate change), one mediator variable (egalitarian views), and one dependent variable (support for government action on climate change). Conventional cut-off criteria were adopted to indicate adequate fit for the hypothesised model to the observed data (TLI and CFI > .90, RMSEA and SRMR < .10).
+
+The path model displayed perfect fit, because it was a just-identified model. The path coefficient between negative emotions and egalitarianism was significant (b = .406, B = .608, 95% bootstrap CI = .328, .482). The path coefficient between egalitarianism and government support was not significant (b = .037, B = .04, 95% bootstrap CI = .-0.126, .0.2). To determine whether the mediated effect of negative emotion on government supprot through egalitarianism was not statistically significant, the indirect effect (i.e., ab) and its 95% confidence interval was calculated using a bootstrapping procedure that drew 5,000 resamples. The indirect effect was ab = .015 and the bootstrapped confidence interval with 5,000 resamples included zero, 95% CI [.152,.082].
+
+### Confirmatory factor analysis
+```{r}
+cfa.model <- "
+emotions =~ NegEmot1 + NegEmot2 + NegEmot3
+egalitarianism=~ Egal1 + Egal2 + Egal3
+government =~ GovSupport1 + GovSupport2 + GovSupport3
+"
+```
+
+```{r}
+# Fit the model
+cfa.fit <- cfa(cfa.model, data=climate)
+summary(cfa.fit, fit.measures=TRUE, standardized=TRUE)
+```
+
+CFA = 0.958, TLI = 0.93 which is close to 1. Moreover, RMSEA = 0.094, and SRMR = 0.065, which is below 0.1 therefore we can say that these factors provide a good fit of data. 
+
+All the standarsdised factor(std.all) loading for the latent variables are above 0.4, therefore load well on to their respective latent variables.
+
+Also, the error free correlations between the latent variable appear to be significant (P value is less that 0.05), therefore I would conclude that this is a good assessment measure to move on with. 
+
+
+
+```{r}
+sem.model <- "
+# measurement portion of model
+emotions =~ 1*NegEmot1 + NegEmot2 + NegEmot3
+egalitarianism=~ 1*Egal1 + Egal2 + Egal3
+government =~ 1*GovSupport1 + GovSupport2 + GovSupport3
+# structural portion of model
+government ~ b * emotions + c * egalitarianism
+# the a path
+  egalitarianism ~ a * emotions
+# indirect effect
+ab := a*b
+total := ab+c
+"
+```
+
+```{r}
+sem.fit <- sem(sem.model, data = climate, se = "bootstrap", bootstrap = 500)
+summary(sem.fit, fit.measures=TRUE, standardized=TRUE, ci=TRUE)
+```
+
+
+
+```{r}
+parameterEstimates(sem.fit, boot.ci.type = "perc", standardized = TRUE)
+```
+
+
+In order to test the hypothesized mediation model, SEM was conducted. A fully mediated model was tested that included one independent variable which was emotion, one mediator variable which was egalitarianism, and one dependent variable which was government support. Fit indexes from this model suggested that this model possessed an acceptable fit to the data: TLI = .938; CFI = .958; SRMR = .065; RMSEA = .094. 
+
+The a path of emotions on egalitarianism has a slope of 0.431 and (B = 0.739, CI = 0.312, 0.583, therefore showing that there is a positive significant effect.
+Egalitarianism positively predicts governmental support (b = 0.779, B = 0.489, CI = 0.33, 1.262, which means that it is significant.
+The direct effect of emotions on government support is negative (b = - 0.151, B = -0.163, CI= -0.443, 0.105) which is not significant as the confidence interval falls within zero.
+To determine whether the mediated effect of negative emotion regarding climate change and its effect on government support of climate change policy through egalitarianism was statistically significant, the indirect effect (i.e., ab) and its 95% confidence interval was calculated using a bootstrapping procedure that drew 5,00 resamples. The indirect effect was ab = -0.065 and the bootstrapped confidence interval with 5,000 resamples includes zero, 95% CI [-.22,.04]. Therefore, providing evidence that egalitarianism does not significantly mediate the effect of negative emotions on government support in regards to climate change. 
+
+
+

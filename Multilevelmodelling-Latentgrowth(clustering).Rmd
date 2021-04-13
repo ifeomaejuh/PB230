@@ -1,0 +1,143 @@
+---
+title: "Worksheet 3"
+output: html_notebook
+---
+
+```{r}
+install.packages("lme4")
+install.packages("readr")
+install.packages("interactions")
+install.packages("lavaan")
+```
+
+```{r}
+library(lme4)
+library(readr)
+library(interactions)
+library(lavaan)
+```
+
+```{r}
+library(readr)
+popular <- read_csv("~/Downloads/popular.csv")
+View(popular)
+```
+
+### Fitting the empty model 
+We initally do this to uncover whether there is clustering between the schools
+
+```{r}
+empty.popular.fit <- lmer(formula = popular ~ 1 + (1|school), data=popular, REML=FALSE)
+summary(empty.popular.fit)
+```
+
+From this information we then are able to calculate the intraclass variance. To do this I divided the random effects of the intercept by the sum of the residual of the the random effects and the intercept of the random effect
+```{r}
+0.69/(0.69+1.22)
+```
+So 36% of the variance in popularity can be explain by differences between schools. We can use our judgement to say that this is a high amount of variance that can be predicted by looking at the difference between schools especially because this is over 10%
+
+### Adding the level 2 predictor variable to the empty model 
+
+I will add the predictor of extraversion to the model to see whether it can explain the within person variance in popularity. However this will also be taking into consideration that there is clustering between schools. And will also control for ses and gender 
+
+```{r}
+popular.control.fit <- lmer(formula = popular ~ 1 + extrav_c + gender + ses_c + (1 + extrav_c|school), REML=FALSE, data=popular)
+summary(popular.control.fit)
+confint(popular.control.fit, method="boot", nsim=100)
+```
+The unstandardised fixed effects intercept for extroversion on popularity tells us the expected value of popularity for a person who has an average level of extraversion for their school, and this value is 4.4. The 95% confidence interval shows us that this is significant as it runs from 4.27 to 4.48. 
+
+More importantly the unstandardisted fixed effect of the slope is 0.45, which tells us that for every unit increase in extroversion there is a corresponding increase in popularity of 0.49. This slope is significant as the confidence interval runs from 0.41 to 0.51. Therefore, extraversion is a good predictor of the variance in popularity.
+
+The standardised random effects for extroversion is 0.184, which tells us how much variability there was around the slopes of the different schools. (Sig03) - There is a significant difference in the slopes of the different schools (95% CI = 0.13, 0.23), and extraversion significantly predicted the slopes between the schools. 
+
+To answer the research question does extroversion positively predict popularity, we can conclude that it does as we have estimated a slope of 0.45 and this had a significant effect according to a significant 95% bootstraped confidence interval (95% Ci = -.41, .51). The interpretation fo this regression is that for every one unit increase in extraversion there is a simultaneous 0.45 unit increase in popularity on average for children at the different schools whilst controlling for gender and SES.
+
+### Adding a Between-School (level 1) Predictor of the Random Intercepts and Slopes
+```{r}
+# fit model
+popular.int.fit <- 
+  lmer(formula = popular ~ 1 + extrav_c + ses_c + extrav_c*ses_c + (1 + extrav_c|school), data=popular)
+summary(popular.int.fit)
+confint(popular.int.fit, method="boot", nsim=100)
+
+```
+The fixed effect of the interaction between extraversion and an individuals SES has a slope of -0.03, which tells us the relationship between extraversion and popularity, as dependent on the individuals SES. And this result is significant as the CI falls between -0.0336 to -0.022. 
+
+
+
+
+### Plotting the interaction
+```{r}
+johnson_neyman(model=popular.int.fit, pred=extrav_c, modx=ses_c)
+```
+The graph shows that ses has a moderating effect on the relationship between extraversion and popularity for the majority of people, however with individuals who go to a school with ses that is 10.74 units above the mean or -12.26 units below the mean. 
+
+From this we can conclude that there is a significiant interaction effect, therefore provide sufficient evidence to suggest that SES moderates the relationship between extroversion and popularity.
+
+
+### Task 2 Later growth modelling 
+```{r}
+library(readr)
+covid <- read_csv("~/Downloads/covid.csv")
+View(covid)
+```
+
+### Build and fit the LGC of stress 
+
+This contains no predictors - we are just building a model which we will later fit the data to.
+
+```{r}
+lgc.stress <- "
+intercept =~ 1*t1 + 1*t2 + 1*t3 + 1*t4
+    slope =~ 0*t1 + 1*t2 + 2*t3 + 3*t4
+"
+```
+
+```{r}
+## Fitting the covid data onto  the lgc.stress model 
+stress.fit <- growth(lgc.stress, data=covid)
+summary(stress.fit, fit.measures=TRUE, standardized=TRUE)
+```
+The model fits the data well as we can see that we have a CFI = 0.99, a TFI = 0.99, a RMSEA = 0.039, and a SRMR = 0.12.
+
+The regression of stress intercepts is 0.615 which means that the mean stress levels at the first time point was 0.615 and this was significant. 
+
+More importantly as we are trying to answer the question about the trajectory of the slopes, the fixed effect of the slopes is important, this value was 1. Which means that the average amount of change in stress levels across the four time points was 1, which shows that on average stress scores improved over time and this result was significant (p < 0.05).  
+
+The random effect for the intercept was 1.93 which describes the average amount of variance between peoples stress scores at the first time point. There was also a significant difference in what levels of stress people reported at the first time point. (may be because they show different levels of perfectionism) 
+
+The random effect of the slopes was 0.59 which shows the average amount of variance in the change between time points in stress levels. The p value is less that 0.05 which shows that there is significant variability around the average stress trajectory, therefore we may want to add an additional predictor to explain these differences. 
+
+The covariance between the random intercept and the random slope is 0.618. This tells us the relationship between an individuals stress scores at the initial stage and whether this has a relationship with the slope across time. This was statistically significant, which tells us that those who start at a high level of stress are likely to show sharper changes in their stress trajectory, however those who start lower in their stress scores at the first time point, show smaller changes in their stress trajectory.
+
+
+### Adding perfectionism to the model
+We build the code for the model that regress the random intercepts and random slopes of stress on perfectionsim levels (perf runs from 0 to 6).
+```{r}
+lgc.stress.model <- "
+    # intercept and slope with fixed coefficients
+    intercept =~ 1*t1 + 1*t2 + 1*t3 + 1*t4
+    slope =~ 0*t1 + 1*t2 + 2*t3 + 3*t4
+    # regress categorcial predictor on the slopes and intercepts
+    intercept ~ perf
+    slope ~ perf
+"
+```
+
+### Fiting the lgc.stress.model onto the data 
+```{r}
+lgc.stress.fit <- growth(lgc.stress.model, data=covid, se = "bootstrap", bootstrap = 100)
+summary(lgc.stress.fit, fit.measures=TRUE, standardized=TRUE)
+parameterestimates(lgc.stress.fit, boot.ci.type = "perc", standardized = TRUE)
+```
+Inspecting the model fit, we see that the CFI and the TFI are both 0.99,  the RMSEA = 0.021 and the SRMR = 0.011, which shows that the model fits the data well therefore we can go on to looking at the output of the model. 
+
+The regression estimate for stress intercepts on perfectionism is 0.644, and this is significant (95% CI = .50, 0.76). We can interpret this to mean that for every unit increase in the level of perfectionism, there is a corresponding increase in stress levels of 0.644. 
+
+The regression estimate for stress slopes on perfectionism is 0.308, and this was observed to be statistically significant (95% CI = 0.23, 0.37). This meant that for every unit increase in perfectionism, there was a significant increase by 0.308 in stress scores from the first time point (essentially how the trajectories change across time for people with different levels of perfectionism). <<- use this information to answer the question
+
+In conclusion, the regression estimate for stress slopes on perfectionism was 0.308, which was a statistically significant increase in stress slopes according to the 95% bootstraped confidence interval (95% CI = 0.23, 0.37). Therefore, to answer the research question students who show high levels of perfectionism also experience greater increases in stress over the lockdown period. 
+
+201900494
